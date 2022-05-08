@@ -13,6 +13,7 @@
 #include <Windows.h>
 #include <filesystem>
 
+
 namespace fs = std::filesystem;
 
 void writepingfile()
@@ -24,6 +25,42 @@ void writepingfile()
     pingfile.open("C:\\Programs\\netdet\\ping.cmd");
     pingfile << "ping %1 -a -n 5 > C:\\Programs\\netdet\\reports\\%1.report\n\"done\" > C:\\Programs\\netdet\\reports\\%1.done\nexit";
     pingfile.close();
+}
+
+void writeopscfile()
+{
+    std::ofstream opsfile;
+    opsfile.open("C:\\Programs\\netdet\\opscanner.py");
+    std::string progcode = 
+        "import socket\n"
+        "import sys\n"
+        "print(sys.argv)\n"
+        "IP = sys.argv[1]\n"
+        "port = int(sys.argv[2])\n"
+        "print(IP)\n"
+        "openports = []\n"
+        "try :\n"
+            "\tsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\n"
+            "\tresult = sock.connect_ex((IP, port))\n"
+            "\tif result == 0 :\n"
+                "\t\tprint(f\"Port open: {IP}:{port}\")\n"
+                "\t\topenports.append(port)\n"
+             "\tsock.close()\n"
+            "\tprint(\"Exporting to file...\")\n"
+            "\tf = open(\"C:\\\\Programs\\\\netdet\\\\reports\\\\\" + IP + \".ops\", \"w\")\n"
+            "\tfor i in openports :\n"
+                "\t\tf.write(str(i) + \"\\n\")\n"
+            "\tf.close()\n"
+            "\texit(0)\n"
+        "except socket.gaierror :\n"
+            "\texit(1)\n"
+        "except socket.error :\n"
+            "\texit(2)";
+    opsfile << progcode;
+    opsfile.close();
+    opsfile.open("C:\\Programs\\netdet\\opsstart.cmd");
+    opsfile << "python3 C:\\Programs\\netdet\\opscanner.py %1 %2";
+    opsfile.close();
 }
 
 std::vector<std::string> readlines(std::string path) {
@@ -71,11 +108,15 @@ std::string getdefgw()
     return(dat);
 }
 
-
-void ping(std::string host, int thrid)
+void scanops(std::string host, std::string port)
 {
-    std::string pipa = "start C:\\Programs\\netdet\\ping.cmd " + host;
-    system(pipa.c_str());
+    system(("start C:\\Programs\\netdet\\opsstart.cmd " + host + " " + port).c_str());
+    //system(("Python3 C:\\Programs\\netdet\\opscanner.py " + host + " " + port).c_str());
+}
+
+void ping(std::string host)
+{
+    system(("start C:\\Programs\\netdet\\ping.cmd " + host).c_str());
 }
 //MAIN//MAIN//MAIN//MAIN//MAIN//MAIN//MAIN//MAIN//MAIN//MAIN//MAIN//MAIN//MAIN//
 static int iprange = 256;
@@ -84,6 +125,8 @@ std::vector<std::string> fps;
 int main()
 {
     writepingfile();
+    writeopscfile();
+
     std::string gateway = getdefgw();
     std::string ip;
     std::vector<std::thread> pingsvect;
@@ -104,7 +147,7 @@ int main()
         }
         f.close();
         ip = gateway + std::to_string(i);
-        pingsvect.push_back(std::thread(ping, ip, i));
+        pingsvect.push_back(std::thread(ping, ip));
         pingsvect[i].join();
     }
     ip = gateway + std::to_string(iprange - 1);
@@ -120,6 +163,7 @@ int main()
         f.close();
     }
 
+    std::vector<std::string> onlineips;
     for (int i = 0; i < iprange; i++)
     {
         std::string ip = gateway + std::to_string(i);
@@ -130,45 +174,44 @@ int main()
         std::vector<std::string> thisls = ssplit(thisl, "=");
         std::string avgrpas = "";
         int avgrpai = 0;
-        try
-        {
-            try
+
+        if (thisf.size() == 12) {
+            std::string avgrp = ssplit(thisf[11], "=")[2];
+            //std::cout << avgrp << std::endl;
+            for (int j = 0; j < avgrp.length(); j++)
             {
-                if (thisf.size() > 10) {
-                    std::string avgrp = ssplit(thisf[thisf.size() - 1], "=")[2];
-                    //std::cout << avgrp << std::endl;
-                    for (int j = 0; j < avgrp.length(); j++)
-                    {
-                        if (isdigit(avgrp[j]))
-                        {
-                           // std::cout << avgrp[j];
-                            avgrpas += avgrp[j];
-                            avgrpai = stoi(avgrpas);
-                        }
-                    }
+                if (isdigit(avgrp[j]))
+                {
+                    // std::cout << avgrp[j];
+                    avgrpas += avgrp[j];
+                    avgrpai = stoi(avgrpas);
                 }
             }
-            catch (const std::exception& e) 
-            {
-                std::cout << "error occured: " << e.what() << std::endl;
-                std::cout << avgrpas;
-                return false;
-            }
-            int sent = std::stoi(&thisls[1][1]);
-            int rece = std::stoi(&thisls[2][1]);
-            if (avgrpai > 0)
-            {
-                std::cout << gateway + std::to_string(i) << ": \n\t" << rece << "/" << sent << " packages retreeived\n\t avg response time: " << avgrpai;
-                std::cout << std::endl;
-            }
-
         }
-        catch (const std::exception& e) 
+
+        int sent = std::stoi(&thisls[1][1]);
+        int rece = std::stoi(&thisls[2][1]);
+        if (avgrpai > 0)
         {
-            std::cout << "error occured: " << e.what() << std::endl;
-            std::cout << avgrpas;
-            return false;
+            std::cout << gateway + std::to_string(i) << ": \n\t" << rece << "/" << sent << " packages retreeived\n\t avg response time: " << avgrpai;
+            std::cout << std::endl;
+            onlineips.push_back(gateway + std::to_string(i));
+        }
+    }
+    std::vector<std::thread> oipts;
+    for (int i = 0; i < onlineips.size(); i++)
+    {
+        for (int j = 0; j < 5000; j++)
+        {
+            oipts.push_back(std::thread(scanops, onlineips[i], std::to_string(j)));
+            oipts[i*j+j].join();
         }
 
-   }
+    }
+    for (int i = 0; i < onlineips.size(); i++)
+    {
+
+        std::string path = "C:\\Programs\\netdet\\reports\\" + onlineips[i] + ".ops";
+
+    }
 }
