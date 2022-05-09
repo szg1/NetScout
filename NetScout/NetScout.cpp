@@ -108,10 +108,14 @@ std::string getdefgw()
     return(dat);
 }
 
-void scanops(std::string host, std::string port)
+void scanops(std::string host, std::vector<std::string> vps)
 {
-    system(("start C:\\Programs\\netdet\\opsstart.cmd " + host + " " + port).c_str());
-    //system(("Python3 C:\\Programs\\netdet\\opscanner.py " + host + " " + port).c_str());
+    for (int i = 0; i < vps.size(); i++)
+    {
+        system(("start C:\\Programs\\netdet\\opsstart.cmd " + host + " " + vps[i]).c_str());
+        //system(("Python3 C:\\Programs\\netdet\\opscanner.py " + host + " " + port).c_str());
+    }
+    
 }
 
 void ping(std::string host)
@@ -199,19 +203,34 @@ int main()
         }
     }
     std::vector<std::thread> oipts;
-    for (int i = 0; i < onlineips.size(); i++)
+    std::vector<std::string> vps = { "20", "21", "22", "23", "25", "67", "68", "69", "53", "80", "110", "111", "137", "139", "161", "162", "443", "445" , "8080", "8443" };
+    std::cout << "Ports to scan: \n";
+    for (int i = 0; i < vps.size(); i++)
     {
-        for (int j = 0; j < 5000; j++)
-        {
-            oipts.push_back(std::thread(scanops, onlineips[i], std::to_string(j)));
-            oipts[i*j+j].join();
-        }
+        std::cout << vps[i] << std::endl;
+    }
 
+    std::ifstream plusports("additional ports.list");
+    if (plusports.good())
+    {
+        std::string line;
+        while (std::getline(plusports, line))
+        {
+            std::cout << line << std::endl;
+            vps.push_back(line);
+        }
+    }
+    else
+    {
+        std::cout << "No additional ports requested\n";
     }
     for (int i = 0; i < onlineips.size(); i++)
     {
-
+        oipts.push_back(std::thread(scanops, onlineips[i], vps));
+        oipts[i].join();
+    }
+    for (int i = 0; i < onlineips.size(); i++)
+    {
         std::string path = "C:\\Programs\\netdet\\reports\\" + onlineips[i] + ".ops";
-
     }
 }
